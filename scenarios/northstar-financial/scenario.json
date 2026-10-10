@@ -1,0 +1,109 @@
+{
+  "schema_version": "1",
+  "metadata": {
+    "id": "northstar-financial",
+    "name": "Northstar Financial",
+    "description": "A developer identity, a CI deployer role, an application runtime role and a database credential secret protecting a customer database.",
+    "intended_outcome": "dev-alice reaches customer-db through two role assumptions and a modeled credential-access relationship."
+  },
+  "principals": [
+    {
+      "id": "dev-alice",
+      "name": "Alice (developer)",
+      "kind": "user"
+    }
+  ],
+  "roles": [
+    {
+      "id": "role-ci-deployer",
+      "name": "CI deployer",
+      "trusted_identities": ["dev-alice"]
+    },
+    {
+      "id": "role-app-runtime",
+      "name": "Application runtime",
+      "trusted_identities": ["role-ci-deployer"]
+    }
+  ],
+  "resources": [
+    {
+      "id": "secret-db-credentials",
+      "name": "Customer DB credentials",
+      "kind": "secret",
+      "sensitivity": "restricted"
+    },
+    {
+      "id": "customer-db",
+      "name": "Customer database",
+      "kind": "database",
+      "sensitivity": "restricted"
+    },
+    {
+      "id": "build-artifacts",
+      "name": "Build artifact bucket",
+      "kind": "object_storage",
+      "sensitivity": "internal"
+    }
+  ],
+  "policies": [
+    {
+      "id": "policy-dev-assume-ci",
+      "name": "Developer may assume the CI deployer",
+      "attached_to": ["dev-alice"],
+      "statements": [
+        { "sid": "assume-ci", "effect": "Allow", "actions": ["sts:AssumeRole"], "resources": ["role-ci-deployer"] }
+      ]
+    },
+    {
+      "id": "policy-ci-deploy",
+      "name": "CI deployer permissions",
+      "attached_to": ["role-ci-deployer"],
+      "statements": [
+        { "sid": "artifacts-rw", "effect": "Allow", "actions": ["s3:GetObject", "s3:PutObject"], "resources": ["build-artifacts"] },
+        { "sid": "assume-runtime", "effect": "Allow", "actions": ["sts:AssumeRole"], "resources": ["role-app-runtime"] }
+      ]
+    },
+    {
+      "id": "policy-runtime-secrets",
+      "name": "Runtime may read its database secret",
+      "attached_to": ["role-app-runtime"],
+      "statements": [
+        { "sid": "read-db-secret", "effect": "Allow", "actions": ["secretsmanager:GetSecretValue"], "resources": ["secret-db-credentials"] }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "id": "rel-secret-opens-db",
+      "kind": "credential_access",
+      "source": "secret-db-credentials",
+      "target": "customer-db",
+      "description": "Holding the secret value is modeled as sufficient to access customer-db."
+    }
+  ],
+  "legitimate_access": [
+    {
+      "id": "legit-dev-assume-ci",
+      "principal": "dev-alice",
+      "action": "sts:AssumeRole",
+      "resource": "role-ci-deployer",
+      "description": "Developers must be able to use the CI deployer role."
+    },
+    {
+      "id": "legit-ci-artifacts",
+      "principal": "role-ci-deployer",
+      "action": "s3:PutObject",
+      "resource": "build-artifacts",
+      "description": "CI must be able to publish build artifacts."
+    }
+  ],
+  "objectives": [
+    {
+      "id": "obj-dev-cannot-reach-db",
+      "description": "A developer identity must not be able to reach the customer database.",
+      "principal": "dev-alice",
+      "target": "customer-db",
+      "expectation": "must_be_unreachable"
+    }
+  ]
+}

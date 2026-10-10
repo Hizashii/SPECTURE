@@ -1,0 +1,65 @@
+{
+  "schema_version": "1",
+  "metadata": {
+    "id": "harbor-commerce",
+    "name": "Harbor Commerce",
+    "description": "An order-processing service identity with a broad storage policy next to a bucket of exported customer data.",
+    "intended_outcome": "svc-order-processor reaches customer-exports directly because s3:* on all resources is allowed."
+  },
+  "principals": [
+    {
+      "id": "svc-order-processor",
+      "name": "Order processor service",
+      "kind": "service"
+    }
+  ],
+  "resources": [
+    {
+      "id": "order-receipts",
+      "name": "Order receipts bucket",
+      "kind": "object_storage",
+      "sensitivity": "internal"
+    },
+    {
+      "id": "customer-exports",
+      "name": "Customer exports bucket",
+      "kind": "object_storage",
+      "sensitivity": "restricted"
+    }
+  ],
+  "policies": [
+    {
+      "id": "policy-order-storage",
+      "name": "Order processor storage access",
+      "attached_to": ["svc-order-processor"],
+      "statements": [
+        { "sid": "all-storage", "effect": "Allow", "actions": ["s3:*"], "resources": ["*"] }
+      ]
+    }
+  ],
+  "legitimate_access": [
+    {
+      "id": "legit-read-receipts",
+      "principal": "svc-order-processor",
+      "action": "s3:GetObject",
+      "resource": "order-receipts",
+      "description": "The service must keep reading and writing order receipts."
+    },
+    {
+      "id": "legit-write-receipts",
+      "principal": "svc-order-processor",
+      "action": "s3:PutObject",
+      "resource": "order-receipts",
+      "description": "The service must keep writing order receipts."
+    }
+  ],
+  "objectives": [
+    {
+      "id": "obj-service-cannot-read-exports",
+      "description": "The order processor must not be able to reach customer exports.",
+      "principal": "svc-order-processor",
+      "target": "customer-exports",
+      "expectation": "must_be_unreachable"
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "schema_version": "1",
+  "metadata": {
+    "id": "helios-platform",
+    "name": "Helios Platform",
+    "description": "Two apparent routes to sensitive data: one blocked because the target role does not trust the caller, one blocked by an explicit deny.",
+    "intended_outcome": "Neither route succeeds: ops-bob may call AssumeRole but role-platform-admin does not trust him, and role-analyst is allowed s3:* but explicitly denied on pii-lake."
+  },
+  "principals": [
+    {
+      "id": "ops-bob",
+      "name": "Bob (operations)",
+      "kind": "user"
+    },
+    {
+      "id": "svc-break-glass",
+      "name": "Break-glass automation",
+      "kind": "service"
+    }
+  ],
+  "roles": [
+    {
+      "id": "role-platform-admin",
+      "name": "Platform admin",
+      "trusted_identities": ["svc-break-glass"]
+    },
+    {
+      "id": "role-analyst",
+      "name": "Data analyst",
+      "trusted_identities": ["ops-bob"]
+    }
+  ],
+  "resources": [
+    {
+      "id": "pii-lake",
+      "name": "PII data lake",
+      "kind": "object_storage",
+      "sensitivity": "restricted"
+    },
+    {
+      "id": "analytics-sandbox",
+      "name": "Analytics sandbox",
+      "kind": "object_storage",
+      "sensitivity": "internal"
+    }
+  ],
+  "policies": [
+    {
+      "id": "policy-ops-assume",
+      "name": "Operations may call AssumeRole on admin and analyst",
+      "attached_to": ["ops-bob"],
+      "statements": [
+        { "sid": "assume-admin-analyst", "effect": "Allow", "actions": ["sts:AssumeRole"], "resources": ["role-platform-admin", "role-analyst"] }
+      ]
+    },
+    {
+      "id": "policy-admin-storage",
+      "name": "Platform admin full storage access",
+      "attached_to": ["role-platform-admin"],
+      "statements": [
+        { "sid": "all-storage", "effect": "Allow", "actions": ["s3:*"], "resources": ["*"] }
+      ]
+    },
+    {
+      "id": "policy-analyst-storage",
+      "name": "Analyst storage access with PII deny",
+      "attached_to": ["role-analyst"],
+      "statements": [
+        { "sid": "allow-storage", "effect": "Allow", "actions": ["s3:*"], "resources": ["*"] },
+        { "sid": "deny-pii", "effect": "Deny", "actions": ["s3:*"], "resources": ["pii-lake"] }
+      ]
+    }
+  ],
+  "legitimate_access": [
+    {
+      "id": "legit-bob-analyst",
+      "principal": "ops-bob",
+      "action": "sts:AssumeRole",
+      "resource": "role-analyst",
+      "description": "Operations must be able to assume the analyst role."
+    },
+    {
+      "id": "legit-analyst-sandbox",
+      "principal": "role-analyst",
+      "action": "s3:GetObject",
+      "resource": "analytics-sandbox",
+      "description": "Analysts must be able to read the sandbox."
+    }
+  ],
+  "objectives": [
+    {
+      "id": "obj-bob-cannot-reach-pii",
+      "description": "Operations staff must not be able to reach the PII data lake.",
+      "principal": "ops-bob",
+      "target": "pii-lake",
+      "expectation": "must_be_unreachable"
+    }
+  ]
+}

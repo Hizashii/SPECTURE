@@ -1,0 +1,32 @@
+services:
+  api:
+    build: ./apps/api
+    restart: unless-stopped
+    environment:
+      SPECTRE_SCENARIOS_DIR: /scenarios
+      SPECTRE_DATABASE_URL: sqlite:////app/data/spectre.db
+    volumes:
+      - ./scenarios:/scenarios:ro
+      - api-data:/app/data
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # Not published to the host: only the web container reaches it.
+    expose: ["8000"]
+
+  web:
+    build: ./apps/web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+volumes:
+  api-data:
